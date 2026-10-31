@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K 线 · 网页版</title>
+<style>
+  :root { --ink:#1f2328; --muted:#6b7280; --line:#e8ebef; --bg:#f5f7fa; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:12px 14px 10px; }
+  h1 { margin:0 0 8px; font-size:17px; }
+  .stocks { display:flex; gap:6px; flex-wrap:wrap; }
+  .stocks button { font:inherit; font-size:13px; padding:5px 12px; border-radius:99px;
+                   border:1px solid #d6dbe2; background:#fff; color:var(--ink); }
+  .stocks button.on { background:#1a73e8; border-color:#1a73e8; color:#fff; }
+  .quote { margin-top:10px; font-size:13px; color:var(--muted); line-height:1.6; }
+  .quote b { font-size:19px; color:var(--ink); margin-right:8px; }
+  .up { color:#e4262c; } .down { color:#12a150; }
+  main { padding:10px; }
+  .panel { background:#fff; border:1px solid var(--line); border-radius:12px; padding:8px; }
+  canvas { width:100%; display:block; }
+  footer { color:var(--muted); font-size:12px; text-align:center; padding:10px 14px 26px; line-height:1.6; }
+  .err { color:#c0392b; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>K 线 · 网页版</h1>
+  <div class="stocks" id="stocks"></div>
+  <div class="quote" id="quote">加载中…</div>
+</header>
+<main><div class="panel"><canvas id="cv"></canvas></div></main>
+<footer>数据来自腾讯 / 东方财富公开接口 · 前复权日线 · 只是把历史价格画出来，不预测、不构成买卖建议</footer>
+
+<script>
+var LIST = [
+  { code: "600519", name: "贵州茅台", qt: "sh600519", secid: "1.600519" },
+  { code: "600900", name: "长江电力", qt: "sh600900", secid: "1.600900" },
+  { code: "000001", name: "平安银行", qt: "sz000001", secid: "0.000001" },
+  { code: "300750", name: "宁德时代", qt: "sz300750", secid: "0.300750" }
+];
+var cur = 0, bars = [], seq = 0;
+
+function el(id) { return document.getElementById(id); }
+
+function loadScript(url, cb) {
+  var s = document.createElement("script"), done = false;
+  var timer = setTimeout(function () { finish(new Error("超时")); }, 12000);
+  function finish(err) {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    if (s.parentNode) s.parentNode.removeChild(s);
+    cb(err);
+  }
+  s.onload = function () { finish(null); };
+  s.onerror = function () { finish(new Error("网络错误")); };
+  s.src = url;
+  document.body.appendChild(s);
+}
+
+function parseRows(rows) {
+  return rows.map(function (r) {
+    return { date: (r[0] || "").slice(0, 10), open: +r[1], close: +r[2], high: +r[3], low: +r[4], vol: +r[5] };
+  }).filter(function (b) { return isFinite(b.close) && b.close > 0; });
+}
+
+function fromTencent(st, cb) {
+  var varName = "kline_dayqfq";
+  var url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?_var=" + varName
+    + "&param=" + st.qt + ",day,,,260,qfq&_=" + Date.now();
+  window[varName] = null;
+  loadScript(url, function (err) {
+    var raw = window[varName];
+    if (err || !raw) { cb(new Error("腾讯接口没响应")); return; }
+    var d = raw.data && raw.data[st.qt];
+    var rows = d && (d.qfqday || d.day);
+    if (!rows || !rows.length) { cb(new Error("腾讯没数据")); return; }
+    cb(null, parseRows(rows));
+  });
+}
+
+function fromEastmoney(st, cb) {
+  var cbName = "kcb" + (++seq) + "_" + Date.now();
+  var url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+    + "?secid=" + st.secid + "&fields1=f1,f2,f3,f4,f5,f6"
+    + "&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&end=20500101&lmt=260"
+    + "&cb=" + cbName;
+  window[cbName] = function (data) {
+    var d = data && data.data;
+    if (!d || !d.klines) { cb(new Error("东财没数据")); return; }
+    cb(null, parseRows(d.klines.map(function (row) { return row.split(","); })));
+  };
+  loadScript(url, function (err) {
+    var f = window[cbName];
+    if (err || typeof f !== "function") { cb(new Error("东财接口没响应")); return; }
+    setTimeout(function () {
+      if (!window[cbName]) return;
+      try { delete window[cbName]; } catch (e) {}
+    }, 100);
+  });
+}
+
+function loadStock(i) {
+  cur = i;
+  var st = LIST[i], my = ++seq;
+  Array.prototype.forEach.call(el("stocks").children, function (b, k) {
+    b.className = (k === i ? "on" : "");
+  });
+  el("quote").textContent = "加载 " + st.name + " …";
+  fromTencent(st, function (err1, rows) {
+    if (my !== seq) return;
+    if (rows) { render(st, rows); return; }
+    fromEastmoney(st, function (err2, rows2) {
+      if (my !== seq) return;
+      if (rows2) { render(st, rows2); return; }
+      el("quote").innerHTML = '<span class="err">没拿到数据：' + err1.message + "；" + err2.message
+        + "。点别的股票试试，或过一会儿再刷新。</span>";
+    });
+  });
+}
+
+function render(st, rows) {
+  bars = rows;
+  var last = bars[bars.length - 1], prev = bars[bars.length - 2] || last;
+  var chg = last.close - prev.close, pct = prev.close ? chg / prev.close * 100 : 0;
+  var cls = chg >= 0 ? "up" : "down";
+  el("quote").innerHTML = '<b class="' + cls + '">' + last.close.toFixed(2) + "</b>"
+    + '<span class="' + cls + '">' + (chg >= 0 ? "+" : "") + chg.toFixed(2)
+    + "（" + (chg >= 0 ? "+" : "") + pct.toFixed(2) + "%）</span>"
+    + "　" + st.name + " " + st.code
+    + "<br>" + bars.length + " 根日线（到 " + last.date + "）　MA5 橙 / MA20 蓝 / MA60 紫";
+  draw();
+}
+
+function ma(n) {
+  var out = [], sum = 0;
+  for (var i = 0; i < bars.length; i++) {
+    sum += bars[i].close;
+    if (i >= n) sum -= bars[i - n].close;
+    out.push(i >= n - 1 ? sum / n : null);
+  }
+  return out;
+}
+
+function draw() {
+  var cv = el("cv"), dpr = window.devicePixelRatio || 1;
+  var W = cv.parentNode.clientWidth - 16;
+  var H = Math.max(320, Math.min(560, Math.round(W * 0.62)));
+  cv.width = W * dpr; cv.height = H * dpr;
+  cv.style.height = H + "px";
+  var g = cv.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  if (!bars.length) return;
+
+  var n = bars.length, left = 46, right = 8, top = 10, gap = 16;
+  var volH = Math.round(H * 0.18), priceH = H - top - volH - gap - 20;
+  var plotW = W - left - right;
+
+  var m5 = ma(5), m20 = ma(20), m60 = ma(60);
+  var hi = -Infinity, lo = Infinity;
+  for (var i = 0; i < n; i++) { hi = Math.max(hi, bars[i].high); lo = Math.min(lo, bars[i].low); }
+  [m5, m20, m60].forEach(function (m) {
+    m.forEach(function (v) { if (v != null) { hi = Math.max(hi, v); lo = Math.min(lo, v); } });
+  });
+  var pad = (hi - lo) * 0.06 || 1;
+  hi += pad; lo -= pad;
+
+  var cw = plotW / n, bw = Math.max(1, Math.min(9, cw * 0.62));
+  function xAt(i) { return left + cw * i + cw / 2; }
+  function yAt(p) { return top + (hi - p) / (hi - lo) * priceH; }
+
+  g.font = "11px -apple-system,'PingFang SC','Microsoft YaHei',sans-serif";
+  g.fillStyle = "#8a9099"; g.textAlign = "right"; g.textBaseline = "middle";
+  for (var k = 0; k <= 4; k++) {
+    var p = lo + (hi - lo) * k / 4, y = yAt(p);
+    g.strokeStyle = "#eef1f4"; g.beginPath(); g.moveTo(left, y); g.lineTo(W - right, y); g.stroke();
+    g.fillText(p.toFixed(2), left - 6, y);
+  }
+
+  for (var j = 0; j < n; j++) {
+    var b = bars[j], up = b.close >= b.open;
+    g.strokeStyle = g.fillStyle = up ? "#e4262c" : "#12a150";
+    var x = xAt(j);
+    g.beginPath(); g.moveTo(x, yAt(b.high)); g.lineTo(x, yAt(b.low));
+    g.lineWidth = 1; g.stroke();
+    var y1 = yAt(Math.max(b.open, b.close)), y2 = yAt(Math.min(b.open, b.close));
+    g.fillRect(x - bw / 2, y1, bw, Math.max(1, y2 - y1));
+  }
+
+  function line(arr, color) {
+    g.strokeStyle = color; g.lineWidth = 1.2; g.beginPath();
+    var started = false;
+    arr.forEach(function (v, i) {
+      if (v == null) return;
+      var x = xAt(i), y = yAt(v);
+      if (!started) { g.moveTo(x, y); started = true; } else { g.lineTo(x, y); }
+    });
+    g.stroke();
+  }
+  line(m5, "#f0a020"); line(m20, "#1a73e8"); line(m60, "#8b5cf6");
+
+  var vt = top + priceH + gap, vmax = 0;
+  bars.forEach(function (b) { vmax = Math.max(vmax, b.vol); });
+  for (var q = 0; q < n; q++) {
+    var bb = bars[q], hh = vmax ? bb.vol / vmax * volH : 0;
+    g.fillStyle = bb.close >= bb.open ? "#f3a3a5" : "#9ad3b3";
+    g.fillRect(xAt(q) - bw / 2, vt + volH - hh, bw, Math.max(1, hh));
+  }
+  g.fillStyle = "#8a9099"; g.textAlign = "left"; g.textBaseline = "middle";
+  g.fillText("成交量", left, vt + 8);
+  g.textAlign = "right";
+  g.fillText((vmax / 10000).toFixed(0) + " 万手", W - right, vt + 8);
+
+  g.textAlign = "center"; g.textBaseline = "top"; g.fillStyle = "#8a9099";
+  var ticks = 4;
+  for (var t = 0; t <= ticks; t++) {
+    var idx = Math.min(n - 1, Math.round(t * (n - 1) / ticks));
+    g.textAlign = (t === 0) ? left : (t === ticks ? right : center);
+    g.fillText(bars[idx].date.slice(2), xAt(idx), vt + volH + 4);
+  }
+}
+
+var box = el("stocks");
+LIST.forEach(function (st, i) {
+  var b = document.createElement("button");
+  b.textContent = st.name;
+  b.onclick = function () { loadStock(i); };
+  box.appendChild(b);
+});
+loadStock(0);
+window.addEventListener("resize", function () { if (bars.length) draw(); });
+</script>
+</body>
+</html>

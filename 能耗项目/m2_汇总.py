@@ -39,14 +39,27 @@ def find(name):
 
 
 def ask():
- while True:
-        name = input("查哪台设备?").strip()
-        if name in("q",""):
-            break   
+    while True:
+        name = input("查哪台设备?（输 q 或直接回车退出）").strip()
+        if name in ("q", ""):
+            break
         num = find(name)
         if num is None:
             print("没有找到设备:", name)
-            print("设备:",",".join(d.keys()))
+            print("设备:", ",".join(d.keys()))
         else:
             print(name, num, "{:.1f}%".format(num / total * 100))
+
 ask()
+
+# ---- M4：把汇总写成报告 ----
+print("查询结束，开始生成报告…")
+with open("报告.txt", "w", encoding="utf-8") as f:
+    f.write("能耗报告\n")
+    f.write("生成时间：" + time.strftime("%Y-%m-%d %H:%M") + "\n")
+    f.write("─" * 30 + "\n")
+    for name, val in items:
+        f.write(f"{name}  {val:.2f} 度  {val / total * 100:.1f}%\n")
+    f.write("─" * 30 + "\n")
+    f.write(f"合计 {total:.2f} 度\n")
+print("报告已生成：报告.txt")

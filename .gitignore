@@ -3,3 +3,6 @@ __pycache__/
 *.zip
 *.exe
 炒股复盘/股市助手/
+密钥.txt
+**/密钥.txt
+.env

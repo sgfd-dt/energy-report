@@ -28,6 +28,25 @@ print(d)
 total = sum(d.values())
 items = sorted(d.items(), key=lambda x: x[1], reverse=True)
 
-for name, valve in items:
-    print(name, valve, "{:.1f}%".format(valve / total * 100))
+def line(name, value, total):
+    print(name, value, "{:.1f}%".format(value / total * 100))
+
+for name, val in items:
+    line(name, val,total)
 print("合计", round(total, 1), "度")
+def find(name):
+    return d.get(name)
+
+
+def ask():
+ while True:
+        name = input("查哪台设备?").strip()
+        if name in("q",""):
+            break   
+        num = find(name)
+        if num is None:
+            print("没有找到设备:", name)
+            print("设备:",",".join(d.keys()))
+        else:
+            print(name, num, "{:.1f}%".format(num / total * 100))
+ask()

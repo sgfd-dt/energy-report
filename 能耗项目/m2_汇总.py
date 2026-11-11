@@ -6,7 +6,7 @@ import time
 print("我在跑:", os.path.abspath(__file__))
 print("现在时间：", time.strftime("%Y-%m-%d %H:%M:%S"))
 
-# 默认读 能耗示例.csv；也可以在命令行指定：python m2_汇总.py 能耗示例_坏数据.csv
+# 默认读 能耗示例.csv；也可以在命令行指定：python m2_汇总.py 能耗示例_更坏数据.csv
 if len(sys.argv) > 1:
     FILE = sys.argv[1]
 else:
@@ -17,12 +17,18 @@ with open(FILE, encoding="utf-8") as f:
     rows = list(csv.reader(f))
 
 d = {}
+skipped = 0
 for r in rows[1:]:
-    if r[2].strip() == "":          # ① 电量是空的就跳过
-        print("跳过一行空电量:", r)
-        continue
-    name = r[1].strip()             # ② 设备名去掉前后空格
-    d[name] = d.get(name, 0) + float(r[2])
+    try:
+        if r[2].strip() == "":
+            print("跳过一行空电量:", r)
+            skipped += 1
+            continue
+        name = r[1].strip()
+        d[name] = d.get(name, 0) + float(r[2])
+    except (ValueError, IndexError):
+        print("跳过一行坏数据:", r)
+        skipped += 1
 
 print(d)
 total = sum(d.values())
@@ -55,6 +61,7 @@ ask()
 # ---- M4：把汇总写成报告 ----
 print("查询结束，开始生成报告…")
 with open("报告.txt", "w", encoding="utf-8") as f:
+   
     f.write("能耗报告\n")
     f.write("生成时间：" + time.strftime("%Y-%m-%d %H:%M") + "\n")
     f.write("─" * 30 + "\n")
@@ -62,4 +69,5 @@ with open("报告.txt", "w", encoding="utf-8") as f:
         f.write(f"{name}  {val:.2f} 度  {val / total * 100:.1f}%\n")
     f.write("─" * 30 + "\n")
     f.write(f"合计 {total:.2f} 度\n")
+    f.write(f"跳过 {skipped} 行\n")
 print("报告已生成：报告.txt")

@@ -16,7 +16,7 @@ print("数据文件:", FILE)
 with open(FILE, encoding="utf-8") as f:
     rows = list(csv.reader(f))
 
-d = {}
+d = {}# 逐行读数据：坏行跳过，不整条崩
 skipped = 0
 for r in rows[1:]:
     try:
@@ -26,7 +26,7 @@ for r in rows[1:]:
             continue
         name = r[1].strip()
         d[name] = d.get(name, 0) + float(r[2])
-    except (ValueError, IndexError):
+    except (ValueError, IndexError):  # 两种坏数据：转不成数字 / 少一列
         print("跳过一行坏数据:", r)
         skipped += 1
 
@@ -60,7 +60,7 @@ ask()
 
 # ---- M4：把汇总写成报告 ----
 print("查询结束，开始生成报告…")
-with open("报告.txt", "w", encoding="utf-8") as f:
+with open("报告.txt", "w", encoding="utf-8") as f:# 报告格式固定，别改顺序：跳过行 → 标题 → 时间 → 表体 → 合计
    
     f.write("能耗报告\n")
     f.write("生成时间：" + time.strftime("%Y-%m-%d %H:%M") + "\n")

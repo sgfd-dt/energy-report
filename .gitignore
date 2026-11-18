@@ -6,3 +6,7 @@ __pycache__/
 密钥.txt
 **/密钥.txt
 .env
+
+key.txt
+**/key.txt
+*.env

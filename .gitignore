@@ -10,3 +10,7 @@ __pycache__/
 key.txt
 **/key.txt
 *.env
+
+# GitHub 令牌，永不入库
+github_token.txt
+**/github_token.txt

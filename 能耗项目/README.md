@@ -42,6 +42,25 @@ python m7_问答.py                     # 需要 agent入门\key.txt（不进仓
 `m7_问答.py` 要先准备 `D:\ai的文件\agent入门\key.txt`，里面只放一行 API Key。
 **Key 不进仓库**（已在 `.gitignore` 里挡住），也不要贴进任何网页或聊天。
 
+## 怎么配 Key（两种方式，任选一种）
+
+`m7_问答.py` 要一把 DeepSeek 的 API Key（`sk-` 开头）。代码按这个顺序找：
+
+1. **环境变量**（推荐，Key 不落在文件里）
+   ```
+   setx DEEPSEEK_API_KEY "sk-你的key"
+   :: 重开终端后生效
+   ```
+2. **文件**（省事）
+   把 Key 粘进 `D:\ai的文件\agent入门\key.txt`，一行，不加引号
+
+**两条红线**：Key 不写进任何 `.py`，不贴进网页或聊天。仓库里 `.gitignore` 已挡住 `**/key.txt` 和 `.env`。
+
+## 依赖
+
+```
+pip install -r requirements.txt     # pandas + requests
+```
 ## 对账（三份数据、三套已知答案）
 
 同一份程序跑不同数据，结果必须和手算一致，这就是验收标准：

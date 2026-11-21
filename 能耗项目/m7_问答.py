@@ -1,6 +1,11 @@
+import os
 import requests
 
-KEY = open(r"D:\ai的文件\agent入门\key.txt", encoding="utf-8").read().strip()
+# 钥匙：优先读环境变量，读不到再读 key.txt（两种都行）
+KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
+if not KEY:
+    KEY = open(r"D:\ai的文件\agent入门\key.txt", encoding="utf-8").read().strip()
+
 REPORT = open(r"D:\ai的文件\python练习\能耗项目\报告.txt", encoding="utf-8").read()
 
 def ask(question):
